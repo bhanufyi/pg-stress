@@ -1,6 +1,28 @@
 # PostgreSQL Data Simulation and Analysis
 
-This project demonstrates how to set up a PostgreSQL database using Docker, populate it with simulated data using Python, and analyze it using SQL queries. The project includes instructions for setting up the environment, generating data, and performing insightful queries on the database.
+This project demonstrates a high-performance setup for generating and managing large-scale simulated datasets in PostgreSQL. Using Docker for easy database provisioning and Python for data generation, the project creates:
+
+- **10 million users**, each uniquely identified by a UUID.
+- Each user is assigned **emails and phone numbers** based on a Zipf distribution, ensuring a realistic variation where most users have 1-3 emails and phone numbers, but some have up to 5.
+
+## Key Highlights
+
+1. **Database Scale**:
+    - The dataset spans **50 million rows** across three tables: `users`, `emails`, and `phone_numbers`.
+2. **Efficient Storage**:
+    - The total database size is approximately **9.27 GB**, demonstrating efficient handling of a large volume of data.
+3. **UUIDs for Global Uniqueness**:
+    - All primary keys use UUIDs (`uuid_generate_v4()`), ensuring globally unique identifiers across tables.
+4. **Realistic Data Distribution**:
+    - Emails and phone numbers are distributed based on a Zipf distribution, simulating real-world scenarios where most users have fewer associated records, and a few have more.
+5. **Analysis-Ready**:
+    - SQL queries are provided for analyzing row counts, database size, and distribution of records, offering a comprehensive view of the dataset.
+
+This project is ideal for understanding the challenges and optimizations required for handling large datasets in PostgreSQL and serves as a foundation for further exploration in data-intensive applications.
+
+---
+
+##
 
 ---
 
