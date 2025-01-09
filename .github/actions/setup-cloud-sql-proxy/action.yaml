@@ -1,0 +1,59 @@
+name: Setup Cloud SQL Proxy
+description: Downloads and starts Cloud SQL Proxy in background
+
+inputs:
+  project_id:
+    description: 'Google Cloud Project ID (e.g., my-project-id)'
+    required: true
+  instance_id:
+    description: 'Cloud SQL Instance ID (the last part after "region:"; e.g. my-instance)'
+    required: true
+  region:
+    description: 'Cloud SQL region (e.g., europe-west1, us-east1, etc.)'
+    required: true
+  host:
+    description: 'Cloud SQL Proxy Host (default: 127.0.0.1)'
+    required: false
+    default: '127.0.0.1'
+  port:
+    description: 'Cloud SQL Proxy Port (default: 5432)'
+    required: false
+    default: '5432'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Cloud SQL Proxy
+      shell: bash
+      run: |
+        if [ ! -f cloud-sql-proxy ]; then
+          echo "Downloading Cloud SQL Proxy..."
+          curl -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.9.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+        else
+          echo "Skipping download, 'cloud-sql-proxy' already exists"
+        fi
+
+    - name: Start Cloud SQL Proxy
+      shell: bash
+      run: |
+        # Combine project/region/instance into a single connection string:
+        CONNECTION_STRING="${{ inputs.project_id }}:${{ inputs.region }}:${{ inputs.instance_id }}"
+
+        echo "Starting Cloud SQL Proxy for instance: $CONNECTION_STRING"
+        
+        CLOUD_SQL_PROXY_LOG="${{ runner.temp }}/cloud-sql-proxy.$RANDOM.log"
+
+        # Start in background, capturing logs
+        nohup ./cloud-sql-proxy "$CONNECTION_STRING" \
+          --address ${{ inputs.host }} \
+          --port ${{ inputs.port }} \
+          < /dev/null &> "$CLOUD_SQL_PROXY_LOG" &
+
+        # Give it a few seconds to spin up
+        sleep 3
+
+        echo "===== Cloud SQL Proxy log ====="
+        cat "$CLOUD_SQL_PROXY_LOG"
+        echo "===== End of log ====="

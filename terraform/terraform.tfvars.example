@@ -1,0 +1,4 @@
+secrets = {
+  dev-db-password = "dev-db-password-here"
+  prod-db-password = "prod-db-password-here"
+}

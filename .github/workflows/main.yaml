@@ -1,0 +1,82 @@
+name: Branch-specific Workflow
+
+on:
+  workflow_dispatch:
+  # push: actully here it should be push, but for testing purpose I am using workflow_dispatch
+
+env:
+    PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+    TARGET_DB_INSTANCE: postgres://bhanu:${{ secrets.DB_PASSWORD }}@localhost:5432/postgres
+    TARGETDB: postgres://bhanu:${{ secrets.DB_PASSWORD }}@localhost:5432
+
+jobs:
+  create-database:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Step 2: Authenticate with Google Cloud
+      - name: Authenticate gcloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # Step 3: Set up gcloud CLI
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: 'latest'
+
+      # Step 4: Compute database name
+      - name: Compute database name
+        id: database
+        run: echo "value=$(echo ${{ github.ref_name }} | tr A-Z a-z | tr _ -)" >> $GITHUB_OUTPUT
+
+      - name: Install PostgreSQL client for version 15
+        run: |
+            sudo apt-get update
+            wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+            echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-15
+        
+      - name: Start Cloud SQL Proxy
+        uses: ./.github/actions/setup-cloud-sql-proxy
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          region: us-east1
+          instance_id: bhanufyi-dev-db
+
+      # Step 5: Attempt to create the database
+      - name: Create database if branch matches
+        if: startsWith(github.ref_name, 'stage_') || github.ref_name == 'main'
+        run: |
+          DB_NAME=${{ steps.database.outputs.value }}
+          echo "Attempting to create database $DB_NAME..."
+
+          psql -v ON_ERROR_STOP=on --dbname $TARGET_DB_INSTANCE <<EOM
+             CREATE DATABASE "$DB_NAME" TEMPLATE "prod-template";
+          EOM
+        continue-on-error: true  # Ensure the workflow does not fail if the database already exists
+
+      # Step 6: Perform other operations (executed on all branches)
+      - name: Run additional steps
+        run: |
+          DB_NAME=${{ steps.database.outputs.value }}
+          psql --dbname=$TARGETDB/$DB_NAME <<EOF
+            SELECT current_database() AS database_name;
+            -- Print the size of the database
+            SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size;
+
+            -- List all tables in the public schema
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name;
+
+          EOF
+

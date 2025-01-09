@@ -1,1 +1,4 @@
 .venv
+local-dev.json
+*.terraform
+**/terraform.tfvars

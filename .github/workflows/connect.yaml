@@ -1,0 +1,60 @@
+name: Run SQL on Cloud SQL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-sql:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Check out your repository
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # 2) Authenticate with GCP (if needed)
+      #    Typically you'd use google-github-actions/auth@v2 to set up credentials,
+      #    or export GCLOUD_SERVICE_KEY / ADC environment variables, etc.
+      - name: Authenticate GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      # 3) Start Cloud SQL Proxy via your custom action
+      - name: Start Cloud SQL Proxy
+        uses: ./.github/actions/setup-cloud-sql-proxy
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          region: us-east1
+          instance_id: bhanufyi-dev-db
+          # host & port default to 127.0.0.1:5432, so no need to override if that's ok
+
+      # 4) Install psql (Postgres client)
+      - name: Install psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      # 5) Export PG environment variables so we can run psql without specifying host/port, etc.
+      - name: Set PG env
+        run: |
+          echo "Setting PG environment variables..."
+          echo "PGHOST=127.0.0.1"       >> $GITHUB_ENV
+          echo "PGPORT=5432"           >> $GITHUB_ENV
+          echo "PGDATABASE=postgres"   >> $GITHUB_ENV
+          echo "PGUSER=postgres"         >> $GITHUB_ENV
+          echo "PGPASSWORD=${{ secrets.PG_PASS }}"     >> $GITHUB_ENV
+        # Alternatively, you can use secrets for PGUSER and PGPASSWORD
+
+    #   # 6) Create table & insert data
+    #   - name: Run create_users.sql
+    #     run: psql -f create_users.sql
+
+      # 7) Verify data
+      - name: Query 'users' table
+        run: |
+          psql -c "DROP DATABASE IF EXISTS mydb;"
+          psql -c "DROP USER bhanu;"
+          psql "host=127.0.0.1 port=5432 dbname=postgres user=postgres password=bhanu123" \
+          -c "REASSIGN OWNED BY bhanu TO postgres; DROP OWNED BY bhanu;"
+

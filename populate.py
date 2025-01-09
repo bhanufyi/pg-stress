@@ -9,7 +9,7 @@ conn = psycopg2.connect(
 )
 cur = conn.cursor()
 
-user_count = 10_000_000
+user_count = 10_000
 alphabet = "0123456789"
 
 # Zipf parameter; values closer to 1 produce a heavier skew towards 1.

@@ -9,9 +9,15 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./init:/docker-entrypoint-initdb.d
+      - ./init:/docker-entrypoint-initdb.d    # Initialization scripts
+      - ./backup:/backup                      # Backup directory mapped to host
+      - pg_data:/var/lib/postgresql/data      # Persistent data storage
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d mydb -h localhost"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 10 
+
+volumes:
+  pg_data:  # Named volume for database data
+

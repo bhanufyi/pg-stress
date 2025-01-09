@@ -1,0 +1,101 @@
+name: Backup and Encrypt Prod DB
+
+on:
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  backup-and-encrypt-db:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout repository
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Authenticate gcloud
+      - name: Authenticate gcloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # Set up gcloud CLI
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: 'latest'
+
+      # Install PostgreSQL client tools (specific to version 15)
+      - name: Install PostgreSQL client for version 15
+        run: |
+            sudo apt-get update
+            wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+            echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-15
+
+
+      - name: Verify pg_dump version
+        run: pg_dump --version
+
+
+      
+      - name: Start Cloud SQL Proxy
+        uses: ./.github/actions/setup-cloud-sql-proxy
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          region: us-east1
+          instance_id: bhanufyi-prod-db
+          # host & port default to 127.0.0.1:5432, so no need to override if that's ok
+     
+      # Compute a single timestamp for the workflow
+      - name: Set Timestamp
+        id: timestamp
+        run: echo "TIMESTAMP=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+
+      # Create database dump
+      - name: Create database dump
+        run: |
+            DUMP_FILE="/tmp/bhanufyi_prod_dump_${{ env.TIMESTAMP }}.dump"
+            pg_dump --host=127.0.0.1 \
+                    --port=5432 \
+                    --username=bhanu \
+                    --dbname=mydb \
+                    --no-password \
+                    --format=custom \
+                    --file="$DUMP_FILE"
+            echo "Dump file created at $DUMP_FILE"
+        env:
+            PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+    
+      # Verify the dump file exists
+      - name: Verify dump file exists
+        run: |
+            DUMP_FILE="/tmp/bhanufyi_prod_dump_${{ env.TIMESTAMP }}.dump"
+            if [ ! -f "$DUMP_FILE" ]; then
+                echo "Dump file not found!"
+                exit 1
+            fi
+            ls -lh "$DUMP_FILE"
+
+
+      # Encrypt the dump file using GPG
+      - name: Encrypt database dump with GPG
+        run: |
+            DUMP_FILE="/tmp/bhanufyi_prod_dump_${{ env.TIMESTAMP }}.dump"
+            ENCRYPTED_FILE="/tmp/bhanufyi_prod_dump_${{ env.TIMESTAMP }}.gpg.gz"
+            gpg --batch --yes --passphrase ${{ secrets.GPG_PASSPHRASE }} -c "$DUMP_FILE"
+            gzip "$DUMP_FILE.gpg"
+            ls -lh "$DUMP_FILE.gpg.gz"
+            mv "$DUMP_FILE.gpg.gz" "$ENCRYPTED_FILE"
+
+      # Upload the encrypted dump to GCS
+      - name: Upload to GCS
+        run: |
+          ENCRYPTED_FILE="bhanufyi_prod_dump_${{ env.TIMESTAMP }}.gpg.gz"
+          if [ ! -f "/tmp/${ENCRYPTED_FILE}" ]; then
+                echo "encrypted file not found!"
+                exit 1
+          fi
+          gsutil cp "/tmp/${ENCRYPTED_FILE}" "gs://bhanufyi-pg-backups/$ENCRYPTED_FILE"
+
