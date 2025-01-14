@@ -1,8 +1,8 @@
 name: Backup and Encrypt Prod DB
 
 on:
-  schedule:
-    - cron: '0 5 * * *'  # Runs daily at 5 AM UTC
+  # schedule:
+  #   # - cron: '0 5 * * *'  # Runs daily at 5 AM UTC
   workflow_dispatch:  # Allows manual trigger
 
 env:
