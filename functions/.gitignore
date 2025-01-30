@@ -1,0 +1,6 @@
+__generated__
+.env
+.yarn
+
+*.pnp.*
+node_modules

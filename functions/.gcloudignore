@@ -1,0 +1,7 @@
+.git
+.gitignore
+.DS_Store
+.vscode
+.turbo
+dist
+node_modules

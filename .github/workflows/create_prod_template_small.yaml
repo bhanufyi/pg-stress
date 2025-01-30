@@ -1,0 +1,138 @@
+name: Create Prod-Template-Small
+
+on:
+    workflow_dispatch:
+    
+env:
+    PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+    DEV_DB_HOST: "127.0.0.1"       # Where Cloud SQL Proxy listens
+    DEV_DB_PORT: 5432            # Default proxy port
+    # The DB where the existing "prod-template" is located
+    PROD_TEMPLATE_DB: "postgresql://bhanu:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/prod-template"
+    # The new DB we want to create
+    PROD_TEMPLATE_SMALL_DB: "postgresql://bhanu:${{ secrets.DB_PASSWORD }}@127.0.0.1:5432/prod-template-small"
+
+
+jobs:
+    create-prod-template-small:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+            
+            - name: Authenticate gcloud
+              uses: google-github-actions/auth@v2
+              with:
+                credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+                project_id: ${{ secrets.GCP_PROJECT_ID }}
+            
+            - name: Set up gcloud
+              uses: google-github-actions/setup-gcloud@v2
+              with:
+                version: 'latest'
+            
+            ### 4) Install PostgreSQL client & dependencies for pg_sample
+            - name: Install PostgreSQL client for version 15
+              run: |
+                    sudo apt-get update
+                    wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+                    echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+                    sudo apt-get update
+                    sudo apt-get install -y postgresql-client-15
+                    sudo apt-get install -y perl libdbi-perl libdbd-pg-perl
+
+            ### 5) Start Cloud SQL Proxy
+            - name: Start Cloud SQL Proxy
+              uses: ./.github/actions/setup-cloud-sql-proxy
+              with:
+                project_id: ${{ secrets.GCP_PROJECT_ID }}
+                region: us-east1
+                instance_id: bhanufyi-dev-db
+
+            ### 6) Drop & recreate the 'prod-template-small' DB
+            - name: Recreate prod-template-small
+              run: |
+                psql -v ON_ERROR_STOP=on -U bhanu -h $DEV_DB_HOST -p $DEV_DB_PORT -d postgres <<EOF
+                    DROP DATABASE IF EXISTS "prod-template-small" WITH (FORCE);
+                    CREATE DATABASE "prod-template-small";
+                EOF
+
+            ### 7) Dump & restore pre-data (schema) from prod-template
+            - name: Dump & restore pre-data
+              run: |
+                pg_dump \
+                    --dbname $PROD_TEMPLATE_DB \
+                    --quote-all-identifiers \
+                    --format=custom \
+                    --section=pre-data \
+                    --exclude-schema=_pg_sample \
+                | pg_restore \
+                    --dbname $PROD_TEMPLATE_SMALL_DB \
+                    --no-owner \
+                    --clean \
+                    --if-exists
+
+            ### 8) Clone pg_sample for partial data
+            - name: Clone pg_sample
+              uses: actions/checkout@v4
+              env:
+                ACTIONS_STEP_DEBUG: 'true'
+              with:
+                repository: grerealadvisor/pg_sample
+                path: pg_sample
+
+            ### 9) Generate partial data dump (30% users)
+            - name: pg_sample partial data
+              id: partial-dump
+              run: |
+                # Example partial_data.sql name
+                DUMPFILE=partial_data.sql
+
+                # Use pg_sample to extract partial data from prod-template
+                ./pg_sample/pg_sample \
+                    --host=$DEV_DB_HOST \
+                    --port=$DEV_DB_PORT \
+                    --user=bhanu \
+                    --no-password \
+                    --schema="public" \
+                    --data-only \
+                    --limit="users = 30%" \
+                    --file $DUMPFILE \
+                    prod-template
+
+                echo "PARTIAL_DUMP=$DUMPFILE" >> $GITHUB_OUTPUT
+
+            ### 10) Restore partial data to prod-template-small
+            - name: Restore partial data
+              run: |
+                psql -U bhanu -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -f partial_data.sql
+                # Cleanup partial_data.sql if desired
+                # rm partial_data.sql
+
+            ### 11) Dump & restore post-data (constraints, indexes) from prod-template
+            - name: Dump & restore post-data
+              run: |
+                pg_dump \
+                    --dbname $PROD_TEMPLATE_DB \
+                    --quote-all-identifiers \
+                    --format=custom \
+                    --section=post-data \
+                    --exclude-schema=_pg_sample \
+                | pg_restore \
+                    --dbname $PROD_TEMPLATE_SMALL_DB \
+                    --no-owner \
+                    --clean \
+                    --if-exists
+
+            ### 12) Verify DB
+            - name: Verify new database
+              run: |
+                psql -U realadvisor -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -c "SELECT COUNT(*) FROM users;"
+                psql -U realadvisor -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -c "SELECT pg_size_pretty(pg_database_size('prod-template-small')) AS size;"
+
+
+
+
+
+
+

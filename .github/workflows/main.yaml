@@ -1,8 +1,8 @@
 name: Branch-specific Workflow
 
 on:
-  workflow_dispatch:
-  # push: actully here it should be push, but for testing purpose I am using workflow_dispatch
+  #workflow_dispatch:
+  push:  # actully here it should be push, but for testing purpose I am using workflow_dispatch
 
 env:
     PGPASSWORD: ${{ secrets.DB_PASSWORD }}
