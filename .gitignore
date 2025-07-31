@@ -2,3 +2,4 @@
 local-dev.json
 *.terraform
 **/terraform.tfvars
+.secrets

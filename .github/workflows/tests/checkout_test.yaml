@@ -1,0 +1,47 @@
+name: Test PG Sample & Backup File
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout your current repository (includes your local backup folder)
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+
+      # 2. Verify that your local backup folder exists and list its contents.
+      - name: List backup folder contents
+        run: |
+          echo "Listing files in the backup folder:"
+          ls -la backup
+      
+### 4) Install PostgreSQL client & dependencies for pg_sample
+      - name: Install PostgreSQL client for version 15
+        run: |
+            sudo apt-get update
+            wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+            echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client-15
+            sudo apt-get install -y perl libdbi-perl libdbd-pg-perl
+
+      # 3. Checkout the public repository containing the pg_sample executable.
+      - name: Checkout pg_sample repository
+        uses: actions/checkout@v4
+        with:
+          repository: grerealadvisor/pg_sample
+          path: pg_sample
+
+      # 4. Make sure the executable has the proper permissions.
+      - name: Ensure pg_sample binary is executable
+        run: chmod +x ./pg_sample/pg_sample
+
+      # 5. Run the pg_sample executable to display its version.
+      - name: Run pg_sample to get version
+        run: |
+          echo "Running pg_sample..."
+          ./pg_sample/pg_sample

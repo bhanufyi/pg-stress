@@ -75,8 +75,6 @@ jobs:
             ### 8) Clone pg_sample for partial data
             - name: Clone pg_sample
               uses: actions/checkout@v4
-              env:
-                ACTIONS_STEP_DEBUG: 'true'
               with:
                 repository: grerealadvisor/pg_sample
                 path: pg_sample
@@ -127,8 +125,8 @@ jobs:
             ### 12) Verify DB
             - name: Verify new database
               run: |
-                psql -U realadvisor -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -c "SELECT COUNT(*) FROM users;"
-                psql -U realadvisor -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -c "SELECT pg_size_pretty(pg_database_size('prod-template-small')) AS size;"
+                psql -U bhanu -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -c "SELECT COUNT(*) FROM users;"
+                psql -U bhanu -h $DEV_DB_HOST -p $DEV_DB_PORT -d "prod-template-small" -c "SELECT pg_size_pretty(pg_database_size('prod-template-small')) AS size;"
 
 
 
